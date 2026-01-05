@@ -67,6 +67,11 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
+// GetVersion returns the current application version
+func (a *App) GetVersion() string {
+	return a.version
+}
+
 // CheckUpdate checks GitHub for the latest release
 func (a *App) CheckUpdate() UpdateInfo {
 	// 定义 GitHub API 地址
@@ -110,6 +115,18 @@ func (a *App) CheckUpdate() UpdateInfo {
 		DownloadURL: release.HtmlUrl, // 跳转到 Release 页面让用户自己下载
 		Desc:        release.Body,
 	}
+}
+
+// SelectFile opens a file dialog and returns the selected path
+func (a *App) SelectFile() string {
+	path, _ := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "选择 CSV 文件",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "CSV Files (*.csv)", Pattern: "*.csv"},
+			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
+		},
+	})
+	return path
 }
 
 // OpenCSV opens a file dialog and builds an index for the selected CSV file

@@ -6,8 +6,12 @@ export function CheckUpdate():Promise<main.UpdateInfo>;
 
 export function GetRows(arg1:number,arg2:number):Promise<main.CSVRowsResponse>;
 
+export function GetVersion():Promise<string>;
+
 export function LoadCSV(arg1:string):Promise<main.CSVDataMetadata>;
 
 export function OpenCSV():Promise<main.CSVDataMetadata>;
 
 export function SaveCSV(arg1:string,arg2:Array<string>,arg3:Array<any>):Promise<string>;
+
+export function SelectFile():Promise<string>;

@@ -10,6 +10,10 @@ export function GetRows(arg1, arg2) {
   return window['go']['main']['App']['GetRows'](arg1, arg2);
 }
 
+export function GetVersion() {
+  return window['go']['main']['App']['GetVersion']();
+}
+
 export function LoadCSV(arg1) {
   return window['go']['main']['App']['LoadCSV'](arg1);
 }
@@ -20,4 +24,8 @@ export function OpenCSV() {
 
 export function SaveCSV(arg1, arg2, arg3) {
   return window['go']['main']['App']['SaveCSV'](arg1, arg2, arg3);
+}
+
+export function SelectFile() {
+  return window['go']['main']['App']['SelectFile']();
 }
