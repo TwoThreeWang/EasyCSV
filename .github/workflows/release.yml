@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'  # 当推送 v1.0.0, v1.0.1 等 tag 时触发
 
+permissions:
+  contents: write
+
 env:
   # 替换为你的 GitHub 用户名/仓库名，虽然 Action 会自动检测，但显式声明更好
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
