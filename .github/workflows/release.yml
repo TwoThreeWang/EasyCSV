@@ -1,0 +1,56 @@
+name: Wails Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # 当推送 v1.0.0, v1.0.1 等 tag 时触发
+
+env:
+  # 替换为你的 GitHub 用户名/仓库名，虽然 Action 会自动检测，但显式声明更好
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest] # 如果需要构建 mac/linux，在此添加 [windows-latest, ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          check-latest: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build Windows
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        # 这里使用了 -ldflags 来注入版本号，需要在 main.go 中配合变量
+        run: |
+          $tag = $env:GITHUB_REF -replace "refs/tags/", ""
+          wails build -platform windows/amd64 -ldflags "-X main.AppVersion=$tag" -o EasyCSV_${tag}_windows_amd64.exe
+
+      # 如果你以后需要构建 MacOS/Linux，可以在这里添加对应的 step
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            build/bin/*.exe
+          draft: false
+          prerelease: false
+          generate_release_notes: true

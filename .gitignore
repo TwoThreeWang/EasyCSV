@@ -1,0 +1,29 @@
+# Wails
+build/bin/
+build/windows/icon.ico
+frontend/dist/
+frontend/node_modules/
+frontend/package-lock.json.md5
+
+# Go
+bin/
+obj/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+go.work
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
