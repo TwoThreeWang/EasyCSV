@@ -6,8 +6,8 @@ export function CheckUpdate() {
   return window['go']['main']['App']['CheckUpdate']();
 }
 
-export function GetRows(arg1, arg2) {
-  return window['go']['main']['App']['GetRows'](arg1, arg2);
+export function GetRows(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetRows'](arg1, arg2, arg3);
 }
 
 export function GetVersion() {

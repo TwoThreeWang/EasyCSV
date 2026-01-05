@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, reactive, nextTick } from 'vue'
+import { ref, onMounted, reactive, nextTick, watch } from 'vue'
 import { AgGridVue } from 'ag-grid-vue3'
 import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community'
 
@@ -100,6 +100,7 @@ const openFile = async () => {
     const path = await SelectFile()
     if (!path) return
 
+    searchText.value = ''
     isLoading.value = true
     loadingMessage.value = "正在载入并索引文件..."
 
@@ -125,15 +126,30 @@ const openFile = async () => {
     if (headers.length < minCols) {
       for (let i = headers.length; i < minCols; i++) headers.push(`__pad_${i}`)
     }
-    columnDefs.value = headers.map(h => ({
+    const baseCols = headers.map(h => ({
       headerName: h.startsWith('__pad_') ? '' : h,
       field: h,
       editable: !isLargeFile.value, 
     }))
+    columnDefs.value = [
+      {
+        headerName: '#',
+        valueGetter: (params) => params.node.rowIndex + 1,
+        width: 60,
+        pinned: 'left',
+        suppressMovable: true,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        editable: false,
+        cellStyle: { color: '#94a3b8', 'text-align': 'center', 'font-size': '11px', 'background-color': '#f8fafc' }
+      },
+      ...baseCols
+    ]
     gridKey.value++
     if (!isLargeFile.value) {
       loadingMessage.value = "正在解析数据..."
-      const response = await GetRows(0, meta.total)
+      const response = await GetRows(0, meta.total, "")
       rowData.value = response.rows.map(row => {
         const obj = {}
         headers.forEach((h, i) => obj[h] = (i < meta.headers.length) ? (row[i] || '') : '')
@@ -153,7 +169,7 @@ const openFile = async () => {
 const createDatasource = (headers) => ({
   getRows: async (params) => {
     try {
-      const response = await GetRows(params.startRow, params.endRow - params.startRow)
+      const response = await GetRows(params.startRow, params.endRow - params.startRow, searchText.value)
       if (response.error) { params.failCallback(); return }
       const rows = response.rows.map(row => {
         const obj = {}
@@ -163,9 +179,19 @@ const createDatasource = (headers) => ({
         })
         return obj
       })
-      params.successCallback(rows, totalRows.value)
+      params.successCallback(rows, response.total)
     } catch (e) { params.failCallback() }
   }
+})
+
+let searchTimeout = null
+watch(searchText, (newVal) => {
+  if (!isLargeFile.value || !gridApi.value) return
+  
+  clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    gridApi.value.setGridOption('datasource', createDatasource(currentRawHeaders.value))
+  }, 500)
 })
 
 const enableEditMode = async () => {
@@ -173,14 +199,14 @@ const enableEditMode = async () => {
   isLoading.value = true
   loadingMessage.value = "正在拉取全量数据..."
   setTimeout(async () => {
-    const response = await GetRows(0, totalRows.value)
+    const response = await GetRows(0, totalRows.value, "")
     rowData.value = response.rows.map(row => {
       const obj = {}
       columnDefs.value.forEach((col, idx) => obj[col.field] = idx < row.length ? row[idx] : '')
       return obj
     })
     isLargeFile.value = false
-    columnDefs.value = columnDefs.value.map(c => ({ ...c, editable: true }))
+    columnDefs.value = columnDefs.value.map(c => ({ ...c, editable: !!c.field }))
     gridKey.value++
     isLoading.value = false
   }, 50)
@@ -188,7 +214,7 @@ const enableEditMode = async () => {
 
 const saveFile = async () => {
   if (isLargeFile.value || !filePath.value) return
-  const validCols = columnDefs.value.filter(c => c.headerName !== '' || (rowData.value && rowData.value.some(r => r[c.field])))
+  const validCols = columnDefs.value.filter(c => c.field && (c.headerName !== '' || (rowData.value && rowData.value.some(r => r[c.field]))))
   const headers = validCols.map(c => c.headerName || 'Column')
   const rows = rowData.value.map(r => validCols.map(c => r[c.field]))
   const err = await SaveCSV(filePath.value, headers, rows)
@@ -241,11 +267,7 @@ const removeSelected = () => {
           <input 
             v-model="searchText" 
             placeholder="搜索..." 
-            :title="isLargeFile ? '大文件模式：仅搜索已加载的行' : ''"
           />
-          <div v-if="isLargeFile && searchText" class="ecsv-search-tip">
-            仅搜已加载行
-          </div>
         </div>
         <i class="ecsv-v-divider"></i>
         <button class="ecsv-btn-ui ecsv-icon-btn" @click="showAbout = true" title="软件信息">

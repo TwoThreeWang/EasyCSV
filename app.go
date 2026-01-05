@@ -20,14 +20,16 @@ import (
 
 // App struct
 type App struct {
-	ctx          context.Context
-	filePath     string
-	encoding     string
-	headers      []string
-	lineOffsets  []int64 // Byte offset for the start of each data row
-	headerOffset int64   // Byte offset where data begins (after header)
-	mu           sync.Mutex
-	version      string
+	ctx             context.Context
+	filePath        string
+	encoding        string
+	headers         []string
+	lineOffsets     []int64 // Byte offset for the start of each data row
+	headerOffset    int64   // Byte offset where data begins (after header)
+	mu              sync.Mutex
+	version         string
+	lastFilter      string  // Cache for searching
+	filteredOffsets []int64 // Cache for searching
 }
 
 // UpdateInfo represents the update check result
@@ -51,6 +53,7 @@ type CSVDataMetadata struct {
 // CSVRowsResponse represents a chunk of rows
 type CSVRowsResponse struct {
 	Rows  [][]string `json:"rows"`
+	Total int        `json:"total"`
 	Error string     `json:"error"`
 }
 
@@ -247,8 +250,8 @@ func (a *App) LoadCSV(path string) CSVDataMetadata {
 	}
 }
 
-// GetRows reads a specific range of rows using the index
-func (a *App) GetRows(start int, limit int) CSVRowsResponse {
+// GetRows reads a specific range of rows using the index, supports optional filtering
+func (a *App) GetRows(start int, limit int, filter string) CSVRowsResponse {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -256,9 +259,54 @@ func (a *App) GetRows(start int, limit int) CSVRowsResponse {
 		return CSVRowsResponse{Error: "没有打开的文件"}
 	}
 
-	total := len(a.lineOffsets)
+	var activeOffsets []int64
+
+	// If filter is provided, handle searching
+	if filter != "" {
+		if filter != a.lastFilter {
+			// Perform sequential scan to find matches
+			a.filteredOffsets = []int64{}
+			file, err := os.Open(a.filePath)
+			if err != nil {
+				return CSVRowsResponse{Error: "搜索时打开文件失败: " + err.Error()}
+			}
+			// Use the same encoding-aware reader as LoadCSV
+			var reader io.Reader = file
+			if a.encoding == "GBK" {
+				reader = transform.NewReader(file, simplifiedchinese.GBK.NewDecoder())
+			}
+			scanner := bufio.NewScanner(reader)
+
+			// Skip header
+			if !scanner.Scan() {
+				file.Close()
+				return CSVRowsResponse{Error: "空文件"}
+			}
+
+			filterLower := strings.ToLower(filter)
+			var rowIdx int = 0
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.Contains(strings.ToLower(line), filterLower) {
+					if rowIdx < len(a.lineOffsets) {
+						a.filteredOffsets = append(a.filteredOffsets, a.lineOffsets[rowIdx])
+					}
+				}
+				rowIdx++
+			}
+			file.Close()
+			a.lastFilter = filter
+		}
+		activeOffsets = a.filteredOffsets
+	} else {
+		activeOffsets = a.lineOffsets
+		a.lastFilter = ""
+		a.filteredOffsets = nil
+	}
+
+	total := len(activeOffsets)
 	if start >= total {
-		return CSVRowsResponse{Rows: [][]string{}}
+		return CSVRowsResponse{Rows: [][]string{}, Total: total}
 	}
 
 	end := start + limit
@@ -267,17 +315,8 @@ func (a *App) GetRows(start int, limit int) CSVRowsResponse {
 	}
 
 	// Calculate bytes to read
-	startOffset := a.lineOffsets[start]
-	
-	// Determine end offset
-	// If it's the last row, read until EOF (we don't know exact length, but can read enough)
-	// Actually, if we recorded offsets correctly, lineOffsets[end] (if exists) is the end.
-	// But we slicing lineOffsets to exclude header.
-	// lineOffsets[i] is the start of Row i.
-	// To read Row i, we need to read from lineOffsets[i] to lineOffsets[i+1].
-	
-	// Let's simplified: We Seek to startOffset, and use a Scanner/Reader to read (end-start) lines.
-	
+	startOffset := activeOffsets[start]
+
 	file, err := os.Open(a.filePath)
 	if err != nil {
 		return CSVRowsResponse{Error: "读取文件失败: " + err.Error()}
@@ -291,12 +330,8 @@ func (a *App) GetRows(start int, limit int) CSVRowsResponse {
 		reader = transform.NewReader(file, simplifiedchinese.GBK.NewDecoder())
 	}
 
-	// Use csv.Reader to parse the chunk
 	csvR := csv.NewReader(reader)
 	csvR.LazyQuotes = true
-	// Important: we might start reading in the middle of a file.
-	// csv.Reader expects consistent fields.
-	// Since we seeked to a newline, we are at the start of a record (assuming 1 record/line).
 
 	var rows [][]string
 	for i := 0; i < (end - start); i++ {
@@ -305,15 +340,13 @@ func (a *App) GetRows(start int, limit int) CSVRowsResponse {
 			break
 		}
 		if err != nil {
-			// Parsing error (maybe due to multiline quote issue or encoding)
-			// We return a placeholder row to avoid breaking the grid
 			rows = append(rows, []string{"Error: " + err.Error()})
 			continue
 		}
 		rows = append(rows, record)
 	}
 
-	return CSVRowsResponse{Rows: rows}
+	return CSVRowsResponse{Rows: rows, Total: total}
 }
 
 // SaveCSV saves the given data to a CSV file (Overwrites the whole file)

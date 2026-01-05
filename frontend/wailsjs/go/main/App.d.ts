@@ -4,7 +4,7 @@ import {main} from '../models';
 
 export function CheckUpdate():Promise<main.UpdateInfo>;
 
-export function GetRows(arg1:number,arg2:number):Promise<main.CSVRowsResponse>;
+export function GetRows(arg1:number,arg2:number,arg3:string):Promise<main.CSVRowsResponse>;
 
 export function GetVersion():Promise<string>;
 

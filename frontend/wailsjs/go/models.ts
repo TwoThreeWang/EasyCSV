@@ -20,6 +20,7 @@ export namespace main {
 	}
 	export class CSVRowsResponse {
 	    rows: string[][];
+	    total: number;
 	    error: string;
 	
 	    static createFrom(source: any = {}) {
@@ -29,6 +30,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.rows = source["rows"];
+	        this.total = source["total"];
 	        this.error = source["error"];
 	    }
 	}
