@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"unicode/utf8"
 
@@ -353,7 +354,12 @@ func (a *App) GetRows(start int, limit int, filter string) CSVRowsResponse {
 // Note: This still requires sending all data from frontend if user edited everything.
 // For "Huge File" mode, usually we only save edits. But for this "EasyCSV", we stick to full save for now.
 func (a *App) SaveCSV(path string, headers []string, rows [][]string) string {
-	file, err := os.Create(path)
+	ext := filepath.Ext(path)
+	name := strings.TrimSuffix(filepath.Base(path), ext)
+	dir := filepath.Dir(path)
+	newPath := filepath.Join(dir, name+"_new"+ext)
+
+	file, err := os.Create(newPath)
 	if err != nil {
 		return "无法创建文件: " + err.Error()
 	}
